@@ -67,11 +67,34 @@ async def add_points(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if target_id in db["users"]:
             db["users"][target_id]["points"] += amount
             save_data(db)
-            await update.message.reply_text(f"✅ Successfully added {amount} pts to `{target_id}`", parse_mode=ParseMode.MARKDOWN_V2)
+            await update.message.reply_text(f"✅ Points Updated! New Balance: `{db['users'][target_id]['points']}`", parse_mode=ParseMode.MARKDOWN_V2)
             try: await context.bot.send_message(chat_id=int(target_id), text=f"🎁 *Admin Credit!* \n\nAdmin has added *{amount} Points* to your account.", parse_mode=ParseMode.MARKDOWN_V2)
             except: pass
-        else: await update.message.reply_text("❌ User ID not found in database.")
-    except: await update.message.reply_text("💡 Usage: `/addpts <USER_ID> <AMOUNT>`")
+        else: await update.message.reply_text("❌ User ID not found.")
+    except: await update.message.reply_text("💡 Usage: `/addpts <ID> <AMOUNT>`")
+
+async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id not in ADMIN_IDS: return
+    if not context.args:
+        return await update.message.reply_text("💡 Usage: `/broadcast Your message here`")
+    
+    msg_to_send = " ".join(context.args)
+    db = load_data()
+    users = db["users"].keys()
+    
+    sent = 0
+    failed = 0
+    progress = await update.message.reply_text(f"📢 *Broadcasting to {len(users)} users...*", parse_mode=ParseMode.MARKDOWN_V2)
+
+    for user_id in users:
+        try:
+            await context.bot.send_message(chat_id=int(user_id), text=f"📢 *BROADCAST*\n\n{msg_to_send}", parse_mode=ParseMode.MARKDOWN_V2)
+            sent += 1
+            await asyncio.sleep(0.05) # Rate limit protection
+        except:
+            failed += 1
+    
+    await progress.edit_text(f"✅ *Broadcast Finished!*\n\n🚀 *Sent:* `{sent}`\n❌ *Failed:* `{failed}`", parse_mode=ParseMode.MARKDOWN_V2)
 
 # --- USER COMMANDS ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -108,7 +131,8 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if "💰 Balance" in text:
         pts = db["users"].get(uid, {}).get("points", 0)
-        await update.message.reply_text(f"💳 *Available Balance:* `{pts} Pts`", parse_mode=ParseMode.MARKDOWN_V2)
+        kb = ReplyKeyboardMarkup([[KeyboardButton("🔍 Get Number Details")], [KeyboardButton(f"💰 Balance: {pts} Pts")], [KeyboardButton("👥 Refer & Earn")]], resize_keyboard=True)
+        await update.message.reply_text(f"💳 *Available Balance:* `{pts} Pts`", reply_markup=kb, parse_mode=ParseMode.MARKDOWN_V2)
 
     elif text == "👥 Refer & Earn":
         me = await context.bot.get_me()
@@ -153,6 +177,7 @@ if __name__ == '__main__':
     bot.add_handler(CommandHandler("start", start))
     bot.add_handler(CommandHandler("stats", admin_stats))
     bot.add_handler(CommandHandler("addpts", add_points))
+    bot.add_handler(CommandHandler("broadcast", broadcast))
     bot.add_handler(CallbackQueryHandler(callback))
     bot.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_text))
     bot.run_polling(drop_pending_updates=True)
