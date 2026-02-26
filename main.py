@@ -62,7 +62,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             try:
                 await context.bot.send_message(
                     chat_id=int(ref), 
-                    text=f"<b>🎁 Referral Success!</b>\n\nUser <pre>{uid}</pre> joined via your link.\n<b>+1 Point</b> has been added to your wallet!",
+                    text=f"<b>🎁 Referral Success!</b>\n\nNew user joined via your link.\n<b>+1 Point</b> added to your balance!",
                     parse_mode=ParseMode.HTML
                 )
             except: pass
@@ -70,17 +70,16 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         save_data(db)
     
     welcome_text = (
-        f"<b>👋 Welcome to Spy Eye Master!</b>\n\n"
-        f"I am the most advanced <b>Telegram ID to Mobile Number</b> lookup bot. "
-        f"Search through millions of leaked records instantly.\n\n"
-        f"<b>🛠 Your Stats:</b>\n"
-        f"├ 👤 <b>User ID:</b> <code>{uid}</code>\n"
+        f"<b>🛰 Spy Eye Master V3</b>\n\n"
+        f"Get the mobile number linked to any Telegram User ID instantly using our premium database.\n\n"
+        f"<b>👤 Your Account:</b>\n"
+        f"├ 🆔 <b>ID:</b> <code>{uid}</code>\n"
         f"└ 💰 <b>Balance:</b> <code>{db['users'][uid]['points']} Points</code>\n\n"
-        f"<i>Use the menu buttons below to navigate!</i>"
+        f"<i>Select an option below to start your search.</i>"
     )
     
     kb = ReplyKeyboardMarkup([
-        [KeyboardButton("🔍 Search Database")], 
+        [KeyboardButton("🔍 Get Number")], 
         [KeyboardButton("💰 My Wallet"), KeyboardButton("👥 Invite Friends")]
     ], resize_keyboard=True)
     
@@ -94,10 +93,10 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if text == "💰 My Wallet":
         pts = db["users"].get(uid, {}).get("points", 0)
         await update.message.reply_text(
-            f"<b>💳 Your Wallet Balance</b>\n\n"
-            f"💰 <b>Current Points:</b> <code>{pts} Points</code>\n"
-            f"📈 <b>Status:</b> {'Active' if pts > 0 else 'Low Balance'}\n\n"
-            f"<i>1 Search = 3 Points. Share your link to earn more!</i>",
+            f"<b>💳 Wallet Overview</b>\n\n"
+            f"💵 <b>Current Balance:</b> <code>{pts} Points</code>\n"
+            f"📊 <b>Tier:</b> {'Premium' if pts > 10 else 'Basic'}\n\n"
+            f"<i>Cost: 3 points per number search.</i>",
             parse_mode=ParseMode.HTML
         )
 
@@ -105,31 +104,29 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         bot_me = await context.bot.get_me()
         link = f"https://t.me/{bot_me.username}?start={uid}"
         invite_text = (
-            f"<b>👥 Refer & Earn Program</b>\n\n"
-            f"Share your link with friends. For every user who joins via your link, "
-            f"you will receive <b>1 Point</b> instantly!\n\n"
-            f"🔗 <b>Your Unique Link:</b>\n<code>{link}</code>"
+            f"<b>👥 Refer & Earn</b>\n\n"
+            f"Share your link and get <b>1 Point</b> for every unique user.\n\n"
+            f"🔗 <b>Your Link:</b>\n<code>{link}</code>"
         )
         await update.message.reply_text(invite_text, parse_mode=ParseMode.HTML)
 
-    elif text == "🔍 Search Database":
+    elif text == "🔍 Get Number":
         if not await check_membership(int(uid), context):
             msg = (
-                "<b>🚫 Access Denied!</b>\n\n"
-                "To use our database, you must be a member of our official channels. "
-                "Please join them and try again."
+                "<b>🚫 Membership Required!</b>\n\n"
+                "Join our channels to unlock the <b>Get Number</b> tool."
             )
             btns = [
-                [InlineKeyboardButton("📢 Join Channel 1", url="https://t.me/verifiedpaisabots")], 
-                [InlineKeyboardButton("📢 Join Channel 2", url="https://t.me/RARE_API")]
+                [InlineKeyboardButton("📢 Channel 1", url="https://t.me/verifiedpaisabots")], 
+                [InlineKeyboardButton("📢 Channel 2", url="https://t.me/RARE_API")]
             ]
             return await update.message.reply_text(msg, reply_markup=InlineKeyboardMarkup(btns), parse_mode=ParseMode.HTML)
         
         if db["users"].get(uid, {}).get("points", 0) < 3:
-            return await update.message.reply_text("<b>❌ Insufficient Points!</b>\n\nYou need at least 3 points to perform a search.", parse_mode=ParseMode.HTML)
+            return await update.message.reply_text("<b>❌ Low Balance!</b>\n\nYou need 3 points. Invite friends to get more.", parse_mode=ParseMode.HTML)
         
         context.user_data['waiting_id'] = True
-        await update.message.reply_text("<b>🔢 Targeted Search</b>\n\nPlease enter the <b>Telegram User ID</b> of the target to fetch details:", parse_mode=ParseMode.HTML)
+        await update.message.reply_text("<b>🔢 Number Lookup</b>\n\nEnter the <b>Telegram User ID</b> to find their mobile number:", parse_mode=ParseMode.HTML)
 
     elif context.user_data.get('waiting_id'):
         target = text.strip()
@@ -137,9 +134,9 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not target.isdigit(): return
         
         if int(target) in ADMIN_IDS:
-            return await update.message.reply_text("<b>🛡 Protected Profile!</b>\n\nThis ID belongs to our Admin and cannot be searched.", parse_mode=ParseMode.HTML)
+            return await update.message.reply_text("<b>🛡 Access Restricted!</b>\n\nAdmin data is encrypted and protected.", parse_mode=ParseMode.HTML)
 
-        m = await update.message.reply_text("<b>🛰 Establishing Connection...</b>\n<i>Searching global database for records.</i>", parse_mode=ParseMode.HTML)
+        m = await update.message.reply_text("<b>🛰 Querying Database...</b>", parse_mode=ParseMode.HTML)
         try:
             res = requests.get(f"{BASE_API_URL}/api/number={target}?api_key={API_KEY}", timeout=15).json()
             if "result" in res:
@@ -147,31 +144,45 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 db["total_searches"] = db.get("total_searches", 0) + 1
                 save_data(db)
                 final_msg = (
-                    f"<b>✅ Data Found Successfully!</b>\n\n"
-                    f"👤 <b>Telegram ID:</b> <code>{target}</code>\n"
-                    f"📞 <b>Mobile Number:</b> <code>{res['result']['number']}</code>\n\n"
-                    f"<i>3 Points deducted from your balance.</i>"
+                    f"<b>✅ Number Found!</b>\n\n"
+                    f"👤 <b>User ID:</b> <code>{target}</code>\n"
+                    f"📞 <b>Mobile Number:</b> <code>{res['result']['number']}</code>"
                 )
                 await m.edit_text(final_msg, parse_mode=ParseMode.HTML)
             else:
-                await m.edit_text("<b>❌ Search Results:</b>\n\nNo matching records found for this ID in our leaked database.", parse_mode=ParseMode.HTML)
+                await m.edit_text("<b>❌ Result: Not Found</b>\n\nThis ID is not in our database.", parse_mode=ParseMode.HTML)
         except:
-            await m.edit_text("<b>⚠️ System Timeout!</b>\n\nThe server is under heavy load. Please try your search again in a few minutes.", parse_mode=ParseMode.HTML)
+            await m.edit_text("<b>⚠️ Server Error!</b>\n\nPlease try again later.", parse_mode=ParseMode.HTML)
 
 # --- ADMIN PANEL ---
 async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id not in ADMIN_IDS: return
     cmd = update.message.text
     db = load_data()
-    if cmd.startswith("/addpts"):
+    
+    if cmd == "/stats":
+        stats_text = (
+            f"<b>📊 Spy Eye Stats</b>\n\n"
+            f"👥 <b>Users:</b> <code>{len(db['users'])}</code>\n"
+            f"🔎 <b>Total Searches:</b> <code>{db.get('total_searches',0)}</code>"
+        )
+        await update.message.reply_text(stats_text, parse_mode=ParseMode.HTML)
+        
+    elif cmd.startswith("/addpts"):
         try:
             _, tid, amt = cmd.split()
             if tid in db["users"]:
                 db["users"][tid]["points"] += int(amt)
                 save_data(db)
-                await update.message.reply_text(f"✅ Added {amt} points to User {tid}")
-            else: await update.message.reply_text("❌ ID not found in database.")
+                await update.message.reply_text(f"✅ Credited {amt} points to {tid}")
         except: pass
+    
+    elif cmd.startswith("/broadcast"):
+        msg = cmd.replace("/broadcast", "").strip()
+        for u in db["users"]:
+            try: await context.bot.send_message(chat_id=int(u), text=f"📢 <b>ADMIN:</b>\n\n{msg}", parse_mode=ParseMode.HTML)
+            except: pass
+        await update.message.reply_text("✅ Sent.")
 
 if __name__ == '__main__':
     Thread(target=run_web, daemon=True).start()
