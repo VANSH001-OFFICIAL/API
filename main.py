@@ -10,7 +10,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 # --- WEB SERVER ---
 app = Flask('')
 @app.route('/')
-def home(): return "🔥 Spy Eye Bot is Live!", 200
+def home(): return "🔥 Spy Eye Bot is 100% Active!", 200
 
 def run():
     port = int(os.environ.get("PORT", 10000))
@@ -25,23 +25,34 @@ def keep_alive():
 TOKEN = "8645433687:AAH_pMfMPzFviHKh3DDWxIZqDZNLs05UmCs"
 ADMIN_IDS = [7117775366, 7259309072] 
 CHANNELS = ["@verifiedpaisabots", "@RARE_API"]
-DATA_FILE = "users_db.json"
+DATA_FILE = "database.json" # Name changed to force new file creation
 API_KEY = "PAID_SELL12"
 BASE_API_URL = "https://tg-user-id-to-number-m7hl.onrender.com"
 
-# --- DATABASE ---
+# --- DATABASE LOGIC (REPAIRED) ---
 def load_data():
+    default_data = {"users": {}, "total_searches": 0}
     if not os.path.exists(DATA_FILE):
-        with open(DATA_FILE, "w") as f: json.dump({"users": {}, "total_searches": 0}, f)
+        with open(DATA_FILE, "w") as f:
+            json.dump(default_data, f)
+        return default_data
     try:
-        with open(DATA_FILE, "r") as f: 
-            data = json.load(f)
-            if "users" not in data: data = {"users": {}, "total_searches": 0}
-            return data
-    except: return {"users": {}, "total_searches": 0}
+        with open(DATA_FILE, "r") as f:
+            content = f.read()
+            if not content: return default_data
+            return json.loads(content)
+    except (json.JSONDecodeError, Exception):
+        # Agar file corrupt ho jaye toh nayi banaye
+        with open(DATA_FILE, "w") as f:
+            json.dump(default_data, f)
+        return default_data
 
 def save_data(data):
-    with open(DATA_FILE, "w") as f: json.dump(data, f, indent=4)
+    try:
+        with open(DATA_FILE, "w") as f:
+            json.dump(data, f, indent=4)
+    except Exception as e:
+        print(f"Error saving data: {e}")
 
 def escape_md(text):
     return "".join(f"\\{c}" if c in r"_*[]()~`>#+-=|{}.!" else c for c in str(text))
@@ -57,7 +68,7 @@ async def is_joined(user_id, context):
 
 # --- COMMANDS ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data['wait'] = False # Reset any waiting state
+    context.user_data['wait'] = False
     user = update.effective_user
     uid = str(user.id)
     db = load_data()
@@ -67,14 +78,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if ref and ref != uid and ref in db["users"]:
             db["users"][ref]["points"] = db["users"][ref].get("points", 0) + 1
             db["users"][ref]["refer_count"] = db["users"][ref].get("refer_count", 0) + 1
-            try: await context.bot.send_message(chat_id=int(ref), text=r"🎁 *Referral Alert!*" + "\n\nSomeone joined via your link. You earned *1 Point*.", parse_mode=ParseMode.MARKDOWN_V2)
+            try: await context.bot.send_message(chat_id=int(ref), text=r"🎁 *Referral Bonus!* Someone joined via your link. +1 Point.", parse_mode=ParseMode.MARKDOWN_V2)
             except: pass
         db["users"][uid] = {"points": 3, "referred_by": ref, "refer_count": 0}
         save_data(db)
 
     kb = ReplyKeyboardMarkup([[KeyboardButton("🔍 Get Number Details")], [KeyboardButton("💰 My Balance"), KeyboardButton("👥 Refer & Earn")]], resize_keyboard=True)
-    welcome_msg = (f"🚀 *Welcome to Spy Eye Bot {escape_md(user.first_name)}!*" + "\n\n" + r"👇 *Use the menu below to start searching database.*")
-    await update.message.reply_text(welcome_msg, reply_markup=kb, parse_mode=ParseMode.MARKDOWN_V2)
+    await update.message.reply_text(f"🚀 *Welcome {escape_md(user.first_name)}!*\nUse the menu below to start searching.", reply_markup=kb, parse_mode=ParseMode.MARKDOWN_V2)
 
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = str(update.effective_user.id)
@@ -82,50 +92,37 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     db = load_data()
 
     if text == "💰 My Balance":
-        context.user_data['wait'] = False
         pts = db["users"].get(uid, {}).get("points", 0)
         await update.message.reply_text(f"💳 *Balance:* `{pts} Points`", parse_mode=ParseMode.MARKDOWN_V2)
 
     elif text == "👥 Refer & Earn":
-        context.user_data['wait'] = False
         me = await context.bot.get_me()
         link = f"https://t.me/{me.username}?start={uid}"
-        await update.message.reply_text(f"🔗 *Link:* `{escape_md(link)}`", parse_mode=ParseMode.MARKDOWN_V2)
+        await update.message.reply_text(f"🔗 *Your Link:* `{escape_md(link)}`", parse_mode=ParseMode.MARKDOWN_V2)
 
     elif text == "🔍 Get Number Details":
         if not await is_joined(int(uid), context):
             btns = [[InlineKeyboardButton("📢 Channel 1", url=f"https://t.me/{CHANNELS[0][1:]}")], [InlineKeyboardButton("📢 Channel 2", url=f"https://t.me/{CHANNELS[1][1:]}")]]
             return await update.message.reply_text(r"⚠️ *Join channels first!*", reply_markup=InlineKeyboardMarkup(btns), parse_mode=ParseMode.MARKDOWN_V2)
-        
-        if db["users"].get(uid, {}).get("points", 0) < 3:
-            return await update.message.reply_text(r"❌ *Need 3 Points!*", parse_mode=ParseMode.MARKDOWN_V2)
-        
         context.user_data['wait'] = True
         await update.message.reply_text(r"🔢 *Send Telegram ID:*", parse_mode=ParseMode.MARKDOWN_V2)
 
     elif context.user_data.get('wait'):
         target = text.strip()
         context.user_data['wait'] = False
-        
-        # Agar user ne galti se koi dusra button daba diya search ke time
-        if target in ["🔍 Get Number Details", "💰 My Balance", "👥 Refer & Earn"]:
-            return await handle_text(update, context)
-
-        if target.isdigit() and int(target) in ADMIN_IDS:
-            return await update.message.reply_text(r"🛡️ *Protected ID!*", parse_mode=ParseMode.MARKDOWN_V2)
+        if not target.isdigit(): return
         
         m = await update.message.reply_text(r"🛰️ *Searching...*", parse_mode=ParseMode.MARKDOWN_V2)
         try:
             res = requests.get(f"{BASE_API_URL}/api/number={target}?api_key={API_KEY}", timeout=25).json()
             if "result" in res:
-                db["users"][uid]["points"] -= 3
+                db["users"][uid]["points"] = db["users"][uid].get("points", 3) - 3
                 db["total_searches"] = db.get("total_searches", 0) + 1
                 save_data(db)
                 await m.edit_text(f"✅ *Found:* `{res['result']['number']}`", parse_mode=ParseMode.MARKDOWN_V2)
             else: await m.edit_text(r"❌ *No Data Found.*", parse_mode=ParseMode.MARKDOWN_V2)
         except: await m.edit_text(r"⚠️ *API Error!*", parse_mode=ParseMode.MARKDOWN_V2)
 
-# --- ADMIN ---
 async def admin_cmds(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id not in ADMIN_IDS: return
     cmd = update.message.text.split()
@@ -138,9 +135,8 @@ async def admin_cmds(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if target in db["users"]:
             db["users"][target]["points"] += amt
             save_data(db)
-            await update.message.reply_text(f"✅ Added `{amt}` pts to `{target}`.")
-        else:
-            await update.message.reply_text(f"❌ ID `{target}` not in DB. Ask them to /start first.")
+            await update.message.reply_text(f"✅ Added points to `{target}`.")
+        else: await update.message.reply_text("❌ User not in DB.")
 
 if __name__ == '__main__':
     keep_alive()
