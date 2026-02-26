@@ -11,7 +11,7 @@ db_lock = Lock()
 
 app = Flask('')
 @app.route('/')
-def home(): return "🤖 Bot is 100% Active!", 200
+def home(): return "🤖 Spy Eye Master is Online!", 200
 
 def run():
     port = int(os.environ.get("PORT", 10000))
@@ -19,13 +19,21 @@ def run():
 
 # --- CONFIG ---
 TOKEN = "8645433687:AAH_pMfMPzFviHKh3DDWxIZqDZNLs05UmCs"
-ADMIN_IDS = [7117775366, 7259309072, 1180177016] 
+ADMIN_IDS = [7117775366, 7259309072] 
 CHANNELS = ["@verifiedpaisabots", "@RARE_API"] 
 DATA_FILE = "master_db.json"
 API_KEY = "PAID_SELL12"
 BASE_API_URL = "https://tg-user-id-to-number-m7hl.onrender.com"
 
-# --- DB HANDLER ---
+# --- HELPER: AUTO-ESCAPE FOR MARKDOWN V2 ---
+def esc(text):
+    if not text: return ""
+    # MarkdownV2 requires these characters to be escaped
+    for char in r"_*[]()~`>#+-=|{}.!":
+        text = str(text).replace(char, f"\\{char}")
+    return text
+
+# --- DATABASE ---
 def load_data():
     with db_lock:
         if not os.path.exists(DATA_FILE):
@@ -42,9 +50,6 @@ def save_data(data):
             with open(DATA_FILE, "w") as f: json.dump(data, f, indent=4)
         except: pass
 
-def escape_md(text):
-    return "".join(f"\\{c}" if c in r"_*[]()~`>#+-=|{}.!" else c for c in str(text))
-
 async def is_joined(user_id, context):
     try:
         for ch in CHANNELS:
@@ -53,23 +58,21 @@ async def is_joined(user_id, context):
         return True
     except: return True 
 
-# --- CORE LOGIC ---
+# --- CORE FEATURES ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data['wait'] = False
     uid = str(update.effective_user.id)
     db = load_data()
     if uid not in db["users"]:
         ref = context.args[0] if context.args and context.args[0].isdigit() else None
         if ref and ref in db["users"] and ref != uid:
             db["users"][ref]["points"] = db["users"][ref].get("points", 0) + 1
-            try: await context.bot.send_message(chat_id=int(ref), text="🎁 *Referral Bonus!* You earned +1 Point.")
+            try: await context.bot.send_message(chat_id=int(ref), text=esc("🎁 Referral Bonus! +1 Point Added."), parse_mode=ParseMode.MARKDOWN_V2)
             except: pass
         db["users"][uid] = {"points": 3, "refer_count": 0}
         save_data(db)
     
     kb = ReplyKeyboardMarkup([[KeyboardButton("🔍 Get Number Details")], [KeyboardButton("💰 My Balance"), KeyboardButton("👥 Refer & Earn")]], resize_keyboard=True)
-    # Fixed Warning: Using raw string or escaping properly
-    await update.message.reply_text(r"🚀 *Spy Eye Master Online!*" + "\nUse the menu below to start.", reply_markup=kb, parse_mode=ParseMode.MARKDOWN_V2)
+    await update.message.reply_text(f"🚀 *{esc('Spy Eye Master Online!')}*\n{esc('Use menu to start.')}", reply_markup=kb, parse_mode=ParseMode.MARKDOWN_V2)
 
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = str(update.effective_user.id)
@@ -78,45 +81,40 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if text == "💰 My Balance":
         pts = db["users"].get(uid, {}).get("points", 0)
-        await update.message.reply_text(f"💳 *Your Balance:* `{pts} Points`", parse_mode=ParseMode.MARKDOWN_V2)
+        await update.message.reply_text(f"💳 *{esc('Balance:')}* `{pts} {esc('Points')}`", parse_mode=ParseMode.MARKDOWN_V2)
 
     elif text == "👥 Refer & Earn":
         b = await context.bot.get_me()
         link = f"https://t.me/{b.username}?start={uid}"
-        await update.message.reply_text(f"🔗 *Referral Link:* \n`{escape_md(link)}`", parse_mode=ParseMode.MARKDOWN_V2)
+        await update.message.reply_text(f"🔗 *{esc('Your Link:')}* `{esc(link)}`", parse_mode=ParseMode.MARKDOWN_V2)
 
     elif text == "🔍 Get Number Details":
         if not await is_joined(int(uid), context):
-            btns = [[InlineKeyboardButton("📢 Join Channel 1", url=f"https://t.me/{CHANNELS[0][1:]}")], [InlineKeyboardButton("📢 Join Channel 2", url=f"https://t.me/{CHANNELS[1][1:]}")]]
-            return await update.message.reply_text(r"⚠️ *Join our channels first!*", reply_markup=InlineKeyboardMarkup(btns), parse_mode=ParseMode.MARKDOWN_V2)
+            btns = [[InlineKeyboardButton("Channel 1", url=f"https://t.me/{CHANNELS[0][1:]}")], [InlineKeyboardButton("Channel 2", url=f"https://t.me/{CHANNELS[1][1:]}")]]
+            return await update.message.reply_text(f"📢 *{esc('Join Channels First!')}*", reply_markup=InlineKeyboardMarkup(btns), parse_mode=ParseMode.MARKDOWN_V2)
         if db["users"].get(uid, {}).get("points", 0) < 3:
-            return await update.message.reply_text(r"❌ *Need 3 Points!*", parse_mode=ParseMode.MARKDOWN_V2)
+            return await update.message.reply_text(f"❌ *{esc('Need 3 Points!')}*", parse_mode=ParseMode.MARKDOWN_V2)
         context.user_data['wait'] = True
-        await update.message.reply_text(r"🔢 *Send Target Telegram ID:*", parse_mode=ParseMode.MARKDOWN_V2)
+        await update.message.reply_text(f"🔢 *{esc('Send Target Telegram ID:')}*", parse_mode=ParseMode.MARKDOWN_V2)
 
     elif context.user_data.get('wait'):
         target = text.strip()
         context.user_data['wait'] = False
         if not target.isdigit(): return
         
-        # PROTECTION FEATURE
         if int(target) in ADMIN_IDS:
-            return await update.message.reply_text(r"🛡️ *ID Protected!*", parse_mode=ParseMode.MARKDOWN_V2)
+            return await update.message.reply_text(f"🛡️ *{esc('ID Protected!')}*", parse_mode=ParseMode.MARKDOWN_V2)
 
-        m = await update.message.reply_text(r"🛰️ *Searching Database...*", parse_mode=ParseMode.MARKDOWN_V2)
+        m = await update.message.reply_text(f"🛰️ *{esc('Searching Database...') }*", parse_mode=ParseMode.MARKDOWN_V2)
         try:
-            # 20s Timeout added as requested
             res = requests.get(f"{BASE_API_URL}/api/number={target}?api_key={API_KEY}", timeout=20).json()
             if "result" in res:
                 db["users"][uid]["points"] -= 3
                 db["total_searches"] = db.get("total_searches", 0) + 1
                 save_data(db)
-                await m.edit_text(f"✅ *Found:* `{escape_md(res['result']['number'])}`", parse_mode=ParseMode.MARKDOWN_V2)
-            else: await m.edit_text(r"❌ *No Data Found.*", parse_mode=ParseMode.MARKDOWN_V2)
-        except requests.exceptions.Timeout:
-            await m.edit_text(r"⚠️ *Search Timeout!* API is busy.", parse_mode=ParseMode.MARKDOWN_V2)
-        except: 
-            await m.edit_text(r"⚠️ *System Error!* Try again.", parse_mode=ParseMode.MARKDOWN_V2)
+                await m.edit_text(f"✅ *{esc('Found:')}* `{esc(res['result']['number'])}`", parse_mode=ParseMode.MARKDOWN_V2)
+            else: await m.edit_text(f"❌ *{esc('Not Found.')}*", parse_mode=ParseMode.MARKDOWN_V2)
+        except: await m.edit_text(f"⚠️ *{esc('Timeout/API Error!')}*", parse_mode=ParseMode.MARKDOWN_V2)
 
 # --- ADMIN PANEL ---
 async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -126,25 +124,18 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if text.startswith("/addpts"):
         try:
             _, tid, amt = text.split()
-            if tid in db["users"]:
-                db["users"][tid]["points"] += int(amt)
-                save_data(db)
-                await update.message.reply_text(f"✅ Added {amt} to {tid}")
-            else: await update.message.reply_text("User ID not found.")
+            db["users"][tid]["points"] += int(amt)
+            save_data(db)
+            await update.message.reply_text(f"✅ Added {amt} to {tid}")
         except: pass
     elif text == "/stats":
-        await update.message.reply_text(f"📊 *Users:* {len(db['users'])} | *Searches:* {db.get('total_searches',0)}")
+        await update.message.reply_text(f"📊 Users: {len(db['users'])} | Searches: {db.get('total_searches',0)}")
     elif text.startswith("/broadcast"):
         msg = text.replace("/broadcast", "").strip()
-        if not msg: return
-        sent = 0
         for u in db["users"]:
-            try: 
-                await context.bot.send_message(chat_id=int(u), text=f"📢 *ANNOUNCEMENT*\n\n{msg}", parse_mode=ParseMode.MARKDOWN_V2)
-                sent += 1
-                await asyncio.sleep(0.05)
+            try: await context.bot.send_message(chat_id=int(u), text=f"📢 {msg}")
             except: pass
-        await update.message.reply_text(f"✅ Broadcast Sent to {sent} users.")
+        await update.message.reply_text("✅ Done")
 
 if __name__ == '__main__':
     Thread(target=run, daemon=True).start()
@@ -152,6 +143,4 @@ if __name__ == '__main__':
     bot.add_handler(CommandHandler("start", start))
     bot.add_handler(MessageHandler(filters.COMMAND & filters.User(user_id=ADMIN_IDS), admin_panel))
     bot.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_text))
-    
-    print("🚀 Bot Started with 0 Warnings!")
     bot.run_polling(drop_pending_updates=True)
