@@ -18,7 +18,10 @@ def run_web():
 
 # --- CONFIG ---
 TOKEN = "8645433687:AAH_pMfMPzFviHKh3DDWxIZqDZNLs05UmCs"
+
+# Added the new IDs to the list as requested
 ADMIN_IDS = [7117775366, 7259309072, 7582794336, 1180177016] 
+
 CHANNELS = ["@verifiedpaisabots", "@RARE_API"] 
 DATA_FILE = "users_v3.json" 
 API_KEY = "PAID_SELL12"
