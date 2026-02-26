@@ -63,25 +63,24 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if ref and ref != uid and ref in db["users"]:
             db["users"][ref]["points"] = db["users"][ref].get("points", 0) + 1
             db["users"][ref]["refer_count"] = db["users"][ref].get("refer_count", 0) + 1
-            try: await context.bot.send_message(chat_id=int(ref), text="🎁 *Referral Alert\!*\n\nSomeone joined via your link\. You earned *1 Point*\.", parse_mode=ParseMode.MARKDOWN_V2)
+            try: await context.bot.send_message(chat_id=int(ref), text=r"🎁 *Referral Alert!*" + "\n\nSomeone joined via your link. You earned *1 Point*.", parse_mode=ParseMode.MARKDOWN_V2)
             except: pass
         db["users"][uid] = {"points": 3, "referred_by": ref, "refer_count": 0}
         save_data(db)
 
-    # Clean Keyboard (No Live Points)
     kb = ReplyKeyboardMarkup([
         [KeyboardButton("🔍 Get Number Details")],
         [KeyboardButton("💰 My Balance"), KeyboardButton("👥 Refer & Earn")]
     ], resize_keyboard=True)
     
     welcome_msg = (
-        f"🚀 *Welcome to Spy Eye Bot {escape_md(user.first_name)}\!*\n\n"
-        f"⚡ *The most powerful OSINT tool on Telegram\.*\n"
-        f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"🚀 *Welcome to Spy Eye Bot {escape_md(user.first_name)}!*" + "\n\n"
+        r"⚡ *The most powerful OSINT tool on Telegram.*" + "\n"
+        r"━━━━━━━━━━━━━━━━━━━━━━━━" + "\n"
         f"👤 *Your Name:* `{escape_md(user.first_name)}` \n"
         f"🆔 *Your ID:* `{uid}`\n"
-        f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"👇 *Use the menu below to start searching database\.*"
+        r"━━━━━━━━━━━━━━━━━━━━━━━━" + "\n"
+        r"👇 *Use the menu below to start searching database.*"
     )
     await update.message.reply_text(welcome_msg, reply_markup=kb, parse_mode=ParseMode.MARKDOWN_V2)
 
@@ -92,25 +91,21 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if text == "💰 My Balance":
         pts = db["users"].get(uid, {}).get("points", 0)
-        await update.message.reply_text(
-            f"💳 *ACCOUNT STATUS*\n\n"
-            f"💰 *Available Balance:* `{pts} Points` \n"
-            f"👤 *User ID:* `{uid}`\n\n"
-            f"🎁 _Refer friends to earn more points for free\!_", 
-            parse_mode=ParseMode.MARKDOWN_V2
-        )
+        msg = (f"💳 *ACCOUNT STATUS*\n\n"
+               f"💰 *Available Balance:* `{pts} Points` \n"
+               f"👤 *User ID:* `{uid}`\n\n"
+               r"🎁 _Refer friends to earn more points for free!_")
+        await update.message.reply_text(msg, parse_mode=ParseMode.MARKDOWN_V2)
 
     elif text == "👥 Refer & Earn":
         me = await context.bot.get_me()
         link = f"https://t.me/{me.username}?start={uid}"
         ref_count = db["users"].get(uid, {}).get("refer_count", 0)
-        ref_msg = (
-            f"👥 *REFERRAL DASHBOARD*\n\n"
-            f"📈 *Total Successful Refers:* `{ref_count}`\n"
-            f"🎁 *Reward:* `1 Point per valid refer`\n\n"
-            f"🔗 *Your Unique Referral Link:* \n"
-            f"`{escape_md(link)}`"
-        )
+        ref_msg = (f"👥 *REFERRAL DASHBOARD*\n\n"
+                   f"📈 *Total Successful Refers:* `{ref_count}`\n"
+                   r"🎁 *Reward:* `1 Point per valid refer`" + "\n\n"
+                   r"🔗 *Your Unique Referral Link:*" + "\n"
+                   f"`{escape_md(link)}`")
         await update.message.reply_text(ref_msg, parse_mode=ParseMode.MARKDOWN_V2)
 
     elif text == "🔍 Get Number Details":
@@ -119,37 +114,32 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 [InlineKeyboardButton("📢 Join Channel 1", url=f"https://t.me/{CHANNELS[0][1:]}")],
                 [InlineKeyboardButton("📢 Join Channel 2", url=f"https://t.me/{CHANNELS[1][1:]}")]
             ]
-            return await update.message.reply_text("⚠️ *ACCESS DENIED\!*\n\nPlease join our official channels to use this search tool\.", reply_markup=InlineKeyboardMarkup(btns), parse_mode=ParseMode.MARKDOWN_V2)
+            return await update.message.reply_text(r"⚠️ *ACCESS DENIED!*" + "\n\nPlease join our official channels to use this search tool.", reply_markup=InlineKeyboardMarkup(btns), parse_mode=ParseMode.MARKDOWN_V2)
         
         if db["users"].get(uid, {}).get("points", 0) < 3:
-            return await update.message.reply_text("❌ *INSUFFICIENT BALANCE\!*\n\nYou need at least *3 Points* for one search\. Refer friends to earn more\.", parse_mode=ParseMode.MARKDOWN_V2)
+            return await update.message.reply_text(r"❌ *INSUFFICIENT BALANCE!*" + "\n\nYou need at least *3 Points* for one search. Refer friends to earn more.", parse_mode=ParseMode.MARKDOWN_V2)
         
         context.user_data['wait'] = True
-        await update.message.reply_text("🔢 *DATABASE SEARCH*\n\nPlease enter the *Telegram User ID* of the target to fetch details:", parse_mode=ParseMode.MARKDOWN_V2)
+        await update.message.reply_text(r"🔢 *DATABASE SEARCH*" + "\n\nPlease enter the *Telegram User ID* of the target to fetch details:", parse_mode=ParseMode.MARKDOWN_V2)
 
     elif context.user_data.get('wait'):
         target = text.strip()
         context.user_data['wait'] = False
         if target.isdigit() and int(target) in ADMIN_IDS:
-            return await update.message.reply_text("🛡️ *SECURITY ALERT\!*\n\nThis ID is protected by our system and cannot be accessed\.", parse_mode=ParseMode.MARKDOWN_V2)
+            return await update.message.reply_text(r"🛡️ *SECURITY ALERT!*" + "\n\nThis ID is protected by our system and cannot be accessed.", parse_mode=ParseMode.MARKDOWN_V2)
         
-        m = await update.message.reply_text("🛰️ *Connecting to database\.\.\.*", parse_mode=ParseMode.MARKDOWN_V2)
+        m = await update.message.reply_text(r"🛰️ *Connecting to database...*", parse_mode=ParseMode.MARKDOWN_V2)
         try:
             res = requests.get(f"{BASE_API_URL}/api/number={target}?api_key={API_KEY}", timeout=25).json()
             if "result" in res:
                 db["users"][uid]["points"] -= 3
                 db["total_searches"] = db.get("total_searches", 0) + 1
                 save_data(db)
-                await m.edit_text(
-                    f"✅ *MATCH FOUND\!*\n\n"
-                    f"👤 *Target ID:* `{target}`\n"
-                    f"📞 *Phone Number:* `{res['result']['number']}`", 
-                    parse_mode=ParseMode.MARKDOWN_V2
-                )
+                await m.edit_text(f"✅ *MATCH FOUND!*" + f"\n\n👤 *Target ID:* `{target}`\n📞 *Phone Number:* `{res['result']['number']}`", parse_mode=ParseMode.MARKDOWN_V2)
             else: 
-                await m.edit_text("❌ *DATA NOT FOUND*\n\nNo records found for this ID in our leaked database\.", parse_mode=ParseMode.MARKDOWN_V2)
+                await m.edit_text(r"❌ *DATA NOT FOUND*" + "\n\nNo records found for this ID in our leaked database.", parse_mode=ParseMode.MARKDOWN_V2)
         except: 
-            await m.edit_text("⚠️ *SYSTEM ERROR\!*\n\nAPI is currently overloaded or down\. Please try again after some time\.", parse_mode=ParseMode.MARKDOWN_V2)
+            await m.edit_text(r"⚠️ *SYSTEM ERROR!*" + "\n\nAPI is currently overloaded or down. Please try again after some time.", parse_mode=ParseMode.MARKDOWN_V2)
 
 # --- ADMIN ---
 async def admin_cmds(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -164,9 +154,9 @@ async def admin_cmds(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if target in db["users"]:
             db["users"][target]["points"] += amt
             save_data(db)
-            await update.message.reply_text(f"✅ Successfully added `{amt}` points to user `{target}`\.", parse_mode=ParseMode.MARKDOWN_V2)
+            await update.message.reply_text(f"✅ Successfully added `{amt}` points to user `{target}`.", parse_mode=ParseMode.MARKDOWN_V2)
         else:
-            await update.message.reply_text("❌ User ID not found in database\.")
+            await update.message.reply_text("❌ User ID not found in database.")
 
 if __name__ == '__main__':
     keep_alive()
