@@ -1,26 +1,18 @@
-import json
-import os
-import requests
-import urllib3
-import asyncio
+import json, os, requests, urllib3, asyncio
 from flask import Flask
 from threading import Thread
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, filters, CallbackQueryHandler
 from telegram.constants import ParseMode
 
-# SSL Warnings fix
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # --- WEB SERVER ---
 app = Flask('')
-
 @app.route('/')
-def home():
-    return "Spy Eye Bot is Active!", 200
+def home(): return "🔥 Spy Eye Bot is 100% Active!", 200
 
 def run():
-    # Render ke liye port 10000 default hota hai, ye use handle karega
     port = int(os.environ.get("PORT", 10000))
     app.run(host='0.0.0.0', port=port)
 
@@ -32,134 +24,130 @@ def keep_alive():
 # --- CONFIG ---
 TOKEN = "8645433687:AAH_pMfMPzFviHKh3DDWxIZqDZNLs05UmCs"
 ADMIN_IDS = [7117775366, 7259309072] 
-CHANNELS = ["@verifiedpaisabots", "@BLACK_SELLERXBIO"]
+CHANNELS = ["@verifiedpaisabots", "@RARE_API"]
 DATA_FILE = "users_db.json"
 API_KEY = "PAID_SELL12"
 
-# --- DATABASE HELPERS (Persistent Fix) ---
+# --- DATABASE ---
 def load_data():
-    # Agar file nahi hai ya khali hai, toh default data banao
-    default = {"users": {}, "protected_ids": ADMIN_IDS, "total_searches": 0}
     if not os.path.exists(DATA_FILE):
-        save_data(default)
-        return default
+        with open(DATA_FILE, "w") as f: json.dump({"users": {}}, f)
     try:
-        with open(DATA_FILE, "r") as f:
-            data = json.load(f)
-            # Ensure users key exists
-            if "users" not in data: data["users"] = {}
-            return data
-    except (json.JSONDecodeError, Exception):
-        return default
+        with open(DATA_FILE, "r") as f: return json.load(f)
+    except: return {"users": {}}
 
 def save_data(data):
-    with open(DATA_FILE, "w") as f:
-        json.dump(data, f, indent=4)
+    with open(DATA_FILE, "w") as f: json.dump(data, f, indent=4)
 
 def escape_md(text):
-    # Python 3.14 safe escape
     return "".join(f"\\{c}" if c in r"_*[]()~`>#+-=|{}.!" else c for c in str(text))
 
-# --- FORCE JOIN CHECK ---
+# --- HELPERS ---
 async def is_joined(user_id, context):
-    for channel in CHANNELS:
+    for ch in CHANNELS:
         try:
-            member = await context.bot.get_chat_member(chat_id=channel, user_id=user_id)
-            if member.status in ["left", "kicked"]: return False
+            m = await context.bot.get_chat_member(chat_id=ch, user_id=user_id)
+            if m.status in ["left", "kicked"]: return False
         except: return False
     return True
 
-# --- MAIN MENU ---
-async def send_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, user):
+# --- UI COMPONENTS ---
+def get_main_kb(uid, db):
+    pts = db["users"].get(str(uid), {}).get("points", 0)
+    return ReplyKeyboardMarkup([
+        [KeyboardButton("🔍 Get Number Details")],
+        [KeyboardButton(f"💰 My Balance: {pts} Pts")],
+        [KeyboardButton("👥 Refer & Earn (Free Pts)")]
+    ], resize_keyboard=True)
+
+# --- COMMANDS ---
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
     uid = str(user.id)
     db = load_data()
 
+    # Referral Logic
     if uid not in db["users"]:
-        # Referral Logic
-        ref_id = context.args[0] if context.args and context.args[0].isdigit() else None
-        if ref_id and ref_id != uid and ref_id in db["users"]:
-            db["users"][ref_id]["points"] = db["users"][ref_id].get("points", 0) + 1
-            db["users"][ref_id]["refer_count"] = db["users"][ref_id].get("refer_count", 0) + 1
-            try:
-                await context.bot.send_message(chat_id=int(ref_id), text="🎁 *Referral Success!* You earned *1 Point*.", parse_mode=ParseMode.MARKDOWN_V2)
+        ref = context.args[0] if context.args and context.args[0].isdigit() else None
+        if ref and ref != uid and ref in db["users"]:
+            db["users"][ref]["points"] = db["users"][ref].get("points", 0) + 1
+            db["users"][ref]["refer_count"] = db["users"][ref].get("refer_count", 0) + 1
+            try: await context.bot.send_message(chat_id=int(ref), text="🎁 *Referral Alert\!*\n\nSomeone joined via your link\. You earned *1 Point*\.", parse_mode=ParseMode.MARKDOWN_V2)
             except: pass
-        
-        db["users"][uid] = {"points": 3, "referred_by": ref_id, "refer_count": 0}
+        db["users"][uid] = {"points": 3, "referred_by": ref, "refer_count": 0}
         save_data(db)
 
-    kb = ReplyKeyboardMarkup([[KeyboardButton("📞 Get Number")], [KeyboardButton("💰 Balance"), KeyboardButton("👥 Refer & Earn")]], resize_keyboard=True)
-    text = f"👋 *Welcome {escape_md(user.first_name)}!*\n\n💰 *Balance:* `{db['users'][uid]['points']} Pts`"
-    
-    if update.callback_query:
-        try: await update.callback_query.message.delete()
-        except: pass
-        await context.bot.send_message(chat_id=user.id, text=text, reply_markup=kb, parse_mode=ParseMode.MARKDOWN_V2)
-    else:
-        await update.message.reply_text(text, reply_markup=kb, parse_mode=ParseMode.MARKDOWN_V2)
-
-# --- HANDLERS ---
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
     if not await is_joined(user.id, context):
-        buttons = [[InlineKeyboardButton("📢 Join Channel 1", url=f"https://t.me/{CHANNELS[0][1:]}")],
-                   [InlineKeyboardButton("📢 Join Channel 2", url=f"https://t.me/{CHANNELS[1][1:]}")],
-                   [InlineKeyboardButton("✅ Verify Joining", callback_data="verify_join")]]
-        return await update.message.reply_text("⚠️ *Join our channels to use this bot!*", reply_markup=InlineKeyboardMarkup(buttons), parse_mode=ParseMode.MARKDOWN_V2)
-    await send_main_menu(update, context, user)
+        btns = [[InlineKeyboardButton("📢 Join Channel 1", url=f"https://t.me/{CHANNELS[0][1:]}")],
+                [InlineKeyboardButton("📢 Join Channel 2", url=f"https://t.me/{CHANNELS[1][1:]}")],
+                [InlineKeyboardButton("✅ Verify & Start Bot", callback_data="verify")]]
+        return await update.message.reply_text(
+            f"🚀 *Welcome to Spy Eye Bot {escape_md(user.first_name)}\!*\\n\nTo access our services, please join our official channels below\.",
+            reply_markup=InlineKeyboardMarkup(btns), parse_mode=ParseMode.MARKDOWN_V2)
+
+    await update.message.reply_text(
+        f"✅ *Access Granted\!*\n\n👋 Welcome back, *{escape_md(user.first_name)}*\!\nUse the menu below to start searching numbers\.",
+        reply_markup=get_main_kb(uid, db), parse_mode=ParseMode.MARKDOWN_V2)
 
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    uid = str(update.effective_user.id)
+    user = update.effective_user
+    uid = str(user.id)
     text = update.message.text
     db = load_data()
 
-    if not await is_joined(update.effective_user.id, context): return
+    if not await is_joined(user.id, context): return await start(update, context)
 
-    if text == "💰 Balance":
+    if "💰 My Balance" in text:
         pts = db["users"].get(uid, {}).get("points", 0)
-        await update.message.reply_text(f"💰 *Balance:* `{pts} Pts`", parse_mode=ParseMode.MARKDOWN_V2)
-    
-    elif text == "👥 Refer & Earn":
-        bot_info = await context.bot.get_me()
-        link = f"https://t.me/{bot_info.username}?start={uid}"
+        await update.message.reply_text(f"💳 *YOUR ACCOUNT STATUS*\n\n💰 *Available Balance:* `{pts} Points`\\n👤 *User ID:* `{uid}`", parse_mode=ParseMode.MARKDOWN_V2)
+
+    elif text == "👥 Refer & Earn (Free Pts)":
+        me = await context.bot.get_me()
+        link = f"https://t.me/{me.username}?start={uid}"
         ref_count = db["users"].get(uid, {}).get("refer_count", 0)
-        await update.message.reply_text(f"👥 *Total Refers:* `{ref_count}`\n🔗 *Your Link:* `{escape_md(link)}`", parse_mode=ParseMode.MARKDOWN_V2)
-    
-    elif text == "📞 Get Number":
+        msg = (f"👥 *REFERRAL DASHBOARD*\n\n"
+               f"📈 *Total Successful Refers:* `{ref_count}`\n"
+               f"🎁 *Reward:* `1 Point per refer`\n\n"
+               f"🔗 *Your Unique Link:* \n`{escape_md(link)}`")
+        await update.message.reply_text(msg, parse_mode=ParseMode.MARKDOWN_V2)
+
+    elif text == "🔍 Get Number Details":
         if db["users"].get(uid, {}).get("points", 0) < 3:
-            return await update.message.reply_text("❌ *Need 3 Pts!*", parse_mode=ParseMode.MARKDOWN_V2)
+            return await update.message.reply_text("❌ *Insufficient Balance\!*\n\nYou need at least *3 Points* to perform a search\. Please refer friends to earn free points\.", parse_mode=ParseMode.MARKDOWN_V2)
         context.user_data['wait'] = True
-        await update.message.reply_text("🔢 *Send Target Telegram ID:*", parse_mode=ParseMode.MARKDOWN_V2)
-    
+        await update.message.reply_text("🔢 *DATABASE SEARCH*\n\nPlease enter the *Telegram User ID* of the target:", parse_mode=ParseMode.MARKDOWN_V2)
+
     elif context.user_data.get('wait'):
         target = text.strip()
         context.user_data['wait'] = False
         if target.isdigit() and int(target) in ADMIN_IDS:
-            return await update.message.reply_text("🛡️ *ID Protected!*", parse_mode=ParseMode.MARKDOWN_V2)
+            return await update.message.reply_text("🛡️ *SECURITY ALERT\!*\n\nThis ID is protected by our system and cannot be searched\.", parse_mode=ParseMode.MARKDOWN_V2)
         
-        m = await update.message.reply_text("🔎 *Searching...*", parse_mode=ParseMode.MARKDOWN_V2)
+        m = await update.message.reply_text("🛰️ *Connecting to Database\.\.\.*", parse_mode=ParseMode.MARKDOWN_V2)
         try:
-            res = requests.get(f"https://tg-user-id-to-number-vnmc.onrender.com/api/number={target}?api_key={API_KEY}", timeout=30, verify=False).json()
+            res = requests.get(f"https://tg-user-id-to-number-m7hl.onrender.com/api/number={target}?api_key={API_KEY}", timeout=35, verify=False).json()
             if "result" in res and "number" in res["result"]:
                 db["users"][uid]["points"] -= 3
                 save_data(db)
-                await m.edit_text(f"✅ *Found:* `{escape_md(res['result']['number'])}`", parse_mode=ParseMode.MARKDOWN_V2)
+                await m.edit_text(f"✅ *MATCH FOUND\!*\n\n👤 *Target ID:* `{target}`\n📞 *Phone Number:* `{escape_md(res['result']['number'])}`", parse_mode=ParseMode.MARKDOWN_V2)
             else:
-                await m.edit_text("❌ *No Data Found.*", parse_mode=ParseMode.MARKDOWN_V2)
+                await m.edit_text("❌ *DATA NOT FOUND*\n\nNo phone number associated with this ID was found in our leaks\.", parse_mode=ParseMode.MARKDOWN_V2)
         except:
-            await m.edit_text("⚠️ *API Error!*", parse_mode=ParseMode.MARKDOWN_V2)
+            await m.edit_text("⚠️ *SYSTEM ERROR\!*\n\nAPI is currently overloaded\. Please try again after 5 minutes\.", parse_mode=ParseMode.MARKDOWN_V2)
 
-async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.callback_query.data == "verify_join":
+async def callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.callback_query.data == "verify":
         if await is_joined(update.effective_user.id, context):
-            await update.callback_query.answer("✅ Verified!")
-            await send_main_menu(update, context, update.effective_user)
+            await update.callback_query.answer("✅ Verification Success!")
+            await update.callback_query.message.delete()
+            await start(update, context)
         else:
-            await update.callback_query.answer("❌ Join both channels first!", show_alert=True)
+            await update.callback_query.answer("❌ Please join both channels first!", show_alert=True)
 
 if __name__ == '__main__':
     keep_alive()
     bot = ApplicationBuilder().token(TOKEN).build()
     bot.add_handler(CommandHandler("start", start))
-    bot.add_handler(CallbackQueryHandler(button_callback))
+    bot.add_handler(CallbackQueryHandler(callback))
     bot.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_text))
     bot.run_polling(drop_pending_updates=True)
